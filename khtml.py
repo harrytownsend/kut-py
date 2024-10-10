@@ -1,3 +1,4 @@
+from typing import Callable
 from typing import Dict
 from typing import List
 from typing import Optional
@@ -17,7 +18,9 @@ class HTMLDocument:
 	_alwaysSelfClosing: List[str] = [
 		"!doctype",
 		"meta",
-		"input"
+		"input",
+		"br",
+		"img"
 	]
 	
 
@@ -109,6 +112,7 @@ class HTMLDocument:
 
 		while (segment := parser.next()) is not None:
 			if isinstance(segment, HTMLParserElementSegment):
+
 				if segment.open:
 					node = self._createNode(segment, parent)
 					parent.children.append(node)
@@ -156,6 +160,7 @@ class HTMLDocument:
 			return None
 		
 	def _linkNodes(self) -> None:
+		# Link the top level nodes.
 		for index, node in enumerate(self._rootList):
 			if isinstance(node, HTMLElementNode):
 				if node.name == "!doctype":
@@ -166,6 +171,7 @@ class HTMLDocument:
 					if index in [0, 1] or not self._strict:
 						self._html = node
 
+		# If we found a html node, link the head and body nodes.
 		if self.html is not None:
 			for index, node in enumerate(self.html.children):
 				if isinstance(node, HTMLElementNode):
@@ -204,6 +210,10 @@ class HTMLNode:
 	def __init__(self, parent: Optional["HTMLNode"] = None):
 		self.parent = parent
 
+	@property
+	def html(self) -> str:
+		return ""
+
 class HTMLElementNode(HTMLNode):
 	
 	_children: List[HTMLNode]
@@ -232,6 +242,77 @@ class HTMLElementNode(HTMLNode):
 	@property
 	def attributes(self) -> Dict[str, str]:
 		return self._attributes
+	
+	@property
+	def html(self) -> str:
+		html: str = "<" + self.name
+
+		# Add attributes
+		for key, value in self.attributes.items():
+			html += " " + key + "=\"" + value + "\""
+		
+		# Check whether we should make the tag self closing.
+		if len(self.children) > 0:
+			html += ">" + self.innerHtml + "</" + self.name + ">"
+		else:
+			html += "/>"
+
+		return html
+
+	@property
+	def innerHtml(self) -> str:
+		html: str = ""
+		for child in self.children:
+			html += child.html
+
+		return html
+	
+	def getElementById(self, id: str) -> Optional["HTMLElementNode"]:
+		results = self.getElementsById(id)
+		if len(results) > 0:
+			return results[0]
+		else:
+			return None
+	
+	def getElementsByClassName(self, className: str) -> List["HTMLElementNode"]:
+		def filter(node: HTMLNode) -> bool:
+			return isinstance(node, HTMLElementNode) and node.hasClass(className)
+		
+		return self.search(filter)
+	
+	def getElementsById(self, id: str) -> List["HTMLElementNode"]:
+		def filter(node: HTMLNode) -> bool:
+			return isinstance(node, HTMLElementNode) and "id" in node.attributes and node.attributes["id"] == id
+		
+		return self.search(filter)
+
+	def getElementsByTagName(self, tagName: str) -> List["HTMLElementNode"]:
+		def filter(node: HTMLNode) -> bool:
+			return isinstance(node, HTMLElementNode) and node.name == tagName
+	
+		return self.search(filter)
+	
+	def hasClass(self, className: str) -> bool:
+		if "class" in self.attributes:
+			classList: List[str] = self.attributes["class"].split(" ")
+			return className in classList
+		else:
+			return False
+
+	def search(self, filter: Callable[[HTMLNode], bool]) -> List[HTMLNode]:
+		
+		def searchRecursive(results: List[HTMLNode], node: HTMLNode, filter: Callable[[HTMLNode], bool]):
+			if filter(node):
+				results.append(node)
+
+			if isinstance(node, HTMLElementNode):
+				for child in node.children:
+					searchRecursive(results, child, filter)
+		
+		results: List[HTMLNode] = []
+		searchRecursive(results, self, filter)
+
+		return results
 
 class HTMLTextNode(HTMLNode):
 	
@@ -241,6 +322,10 @@ class HTMLTextNode(HTMLNode):
 		super().__init__(parent)
 		self.text = text
 
+	@property
+	def html(self) -> str:
+		return self.text
+
 class HTMLCommentNode(HTMLNode):
 	
 	comment: str
@@ -248,6 +333,10 @@ class HTMLCommentNode(HTMLNode):
 	def __init__(self, parent: Optional[HTMLNode] = None, comment: str = ""):
 		super().__init__(parent)
 		self.comment = comment
+
+	@property
+	def html(self) -> str:
+		return "<!-- " + self.comment + " -->"
 
 class HTMLParser:
 
@@ -259,6 +348,12 @@ class HTMLParser:
 	_segmentNext: Optional["HTMLParserSegment"]
 
 	_htmlLength: int
+
+	_contextSwitchTags: List[str] = [
+		"script",
+		"style",
+		"block"
+	]
 
 	def __init__(self, html: str, strict: bool = False):
 		self._html = html
@@ -295,6 +390,8 @@ class HTMLParser:
 	def next(self) -> Optional["HTMLParserSegment"]:
 		segment: Optional[HTMLParserSegment]
 
+		segmentCurrent: Optional[HTMLParserSegment] = self._segmentCurrent
+
 		self._position = self._readWhitespace(self._position)
 		if self._position == self._htmlLength:
 			return None
@@ -302,6 +399,13 @@ class HTMLParser:
 		# Check for a cached segment.
 		if (segment := self._segmentNext) is not None:
 			self._segmentNext = None
+
+		# Check if we're in a special context tag.
+		elif segmentCurrent is not None and isinstance(segmentCurrent, HTMLParserElementSegment) and not segmentCurrent.close and segmentCurrent.name in self._contextSwitchTags:
+			segment = self._readSpecialContextText(self._position, segmentCurrent.name)
+			if segment is None:
+				return None
+
 		# Check for an uncached segment.
 		elif (segment := self._readComment(self._position)) is None and (segment := self._readTag(self._position)) is None and (segment := self._readText(self._position)) is None:
 			if self._position == self._htmlLength:
@@ -434,7 +538,31 @@ class HTMLParser:
 		else:
 			return None
 
+	def _readSpecialContextText(self, position: int, contextTag: str):
+		segment: HTMLParserTextSegment = HTMLParserTextSegment()
+		segment.start = position
 
+		# Look for a text element or a comment to terminate the text node.
+		while (position := self._html.find("<", position)) >= 0:
+			segmentNext: Optional[HTMLParserSegment]
+
+			# Check for a comment or a tag (in that order).
+			if (segmentNext := self._readTag(position)) is not None and not segmentNext.open and segmentNext.close and segmentNext.name == contextTag:
+				self._segmentNext = segmentNext
+
+				segment.end = segmentNext.start
+				segment.text = self._html[segment.start:segment.end].strip()
+				return segment
+			else:
+				position += 1
+
+		# This text node is the end of the file. This should not normally be possible.
+		if not self._strict:
+			segment.end = self._htmlLength
+			segment.text = self._html[segment.start:segment.end].strip()
+			return segment
+		else:
+			return None
 
 
 	"""
