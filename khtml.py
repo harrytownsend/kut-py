@@ -402,8 +402,7 @@ class HTMLParser:
 
 		# Check if we're in a special context tag.
 		elif segmentCurrent is not None and isinstance(segmentCurrent, HTMLParserElementSegment) and not segmentCurrent.close and segmentCurrent.name in self._contextSwitchTags:
-			segment = self._readSpecialContextText(self._position, segmentCurrent.name)
-			if segment is None:
+			if (segment := self._readSpecialContextTagEnd(self._position, segmentCurrent.name)) is None and (segment := self._readSpecialContextText(self._position, segmentCurrent.name)) is None:
 				return None
 
 		# Check for an uncached segment.
@@ -537,8 +536,15 @@ class HTMLParser:
 			return segment
 		else:
 			return None
+		
+	def _readSpecialContextTagEnd(self, position: int, contextTag: str) -> Optional["HTMLParserElementSegment"]:
+		segment: Optional[HTMLParserElementSegment] = self._readTag(position)
+		if segment is not None and not segment.open and segment.close and segment.name == contextTag:
+			return segment
+		else:
+			return None
 
-	def _readSpecialContextText(self, position: int, contextTag: str):
+	def _readSpecialContextText(self, position: int, contextTag: str) -> Optional["HTMLParserTextSegment"]:
 		segment: HTMLParserTextSegment = HTMLParserTextSegment()
 		segment.start = position
 
@@ -547,7 +553,7 @@ class HTMLParser:
 			segmentNext: Optional[HTMLParserSegment]
 
 			# Check for a comment or a tag (in that order).
-			if (segmentNext := self._readTag(position)) is not None and not segmentNext.open and segmentNext.close and segmentNext.name == contextTag:
+			if (segmentNext := self._readSpecialContextTagEnd(position, contextTag)) is not None:
 				self._segmentNext = segmentNext
 
 				segment.end = segmentNext.start
