@@ -4,13 +4,13 @@ from typing import Optional
 
 class HTMLDocument:
 	
-	_html: str
+	_text: str
 	_strict: bool
 	_comments: bool
 
-	_doctype: Optional["HTMLElementNode"]
-	_root: Optional["HTMLElementNode"]
 	_rootList: List["HTMLNode"]
+	_doctype: Optional["HTMLElementNode"]
+	_html: Optional["HTMLElementNode"]
 	_head: Optional["HTMLElementNode"]
 	_body: Optional["HTMLElementNode"]
 
@@ -22,12 +22,12 @@ class HTMLDocument:
 	
 
 	def __init__(self, html: str, strict: bool = False, comments: bool = False):
-		self._html = html
+		self._text = html
 		self._strict = strict
 		self._comments = comments
 
 		self._doctype = None
-		self._root = None
+		self._html = None
 		self._rootList = []
 		self._head = None
 		self._body = None
@@ -36,8 +36,8 @@ class HTMLDocument:
 			raise Exception("An error occurred while attempting to read the html document.")
 
 	@property
-	def html(self) -> str:
-		return self._html
+	def text(self) -> str:
+		return self._text
 	
 	@property
 	def strict(self) -> bool:
@@ -48,16 +48,16 @@ class HTMLDocument:
 		return self._comments
 	
 	@property
+	def rootList(self) -> List["HTMLElementNode"]:
+		return self._rootList
+
+	@property
 	def doctype(self) -> Optional["HTMLElementNode"]:
 		return self._doctype
 	
 	@property
-	def root(self) -> Optional["HTMLElementNode"]:
-		return self._root
-	
-	@property
-	def rootList(self) -> List["HTMLElementNode"]:
-		return self._rootList
+	def html(self) -> Optional["HTMLElementNode"]:
+		return self._html
 	
 	@property
 	def head(self) -> Optional["HTMLElementNode"]:
@@ -98,6 +98,8 @@ class HTMLDocument:
 			else:
 				raise Exception("Unknown node type.")
 				
+		self._linkNodes()
+
 		return True
 				
 	def _loadChildren(self, parent: "HTMLElementNode", parser: "HTMLParser") -> Optional["HTMLParserSegment"]:
@@ -152,6 +154,28 @@ class HTMLDocument:
 			raise Exception("HTML ended before all tags were closed.")
 		else:
 			return None
+		
+	def _linkNodes(self) -> None:
+		for index, node in enumerate(self._rootList):
+			if isinstance(node, HTMLElementNode):
+				if node.name == "!doctype":
+					if index == 0 or not self._strict:
+						self._doctype = node
+
+				elif node.name == "html":
+					if index in [0, 1] or not self._strict:
+						self._html = node
+
+		if self.html is not None:
+			for index, node in enumerate(self.html.children):
+				if isinstance(node, HTMLElementNode):
+					if node.name == "head":
+						if index == 0 or not self._strict:
+							self._head = node
+
+					elif node.name == "body":
+						if index in [0, 1] or not self._strict:
+							self._body = node
 
 	def _createNode(self, segment: "HTMLParserSegment", parent: Optional["HTMLElementNode"] = None) -> Optional["HTMLNode"]:
 		node: Optional[HTMLNode]
