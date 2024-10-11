@@ -286,6 +286,12 @@ class HTMLElementNode(HTMLNode):
 		
 		return self.search(filter)
 
+	def getElementsByName(self, name: str) -> List["HTMLElementNode"]:
+		def filter(node: HTMLNode) -> bool:
+			return isinstance(node, HTMLElementNode) and "name" in node.attributes and node.attributes["name"] == name
+		
+		return self.search(filter)
+
 	def getElementsByTagName(self, tagName: str) -> List["HTMLElementNode"]:
 		def filter(node: HTMLNode) -> bool:
 			return isinstance(node, HTMLElementNode) and node.name == tagName
@@ -299,18 +305,18 @@ class HTMLElementNode(HTMLNode):
 		else:
 			return False
 
-	def search(self, filter: Callable[[HTMLNode], bool]) -> List[HTMLNode]:
+	def search(self, filter: Callable[[HTMLNode], bool], maxDepth: Optional[int] = None) -> List[HTMLNode]:
 		
-		def searchRecursive(results: List[HTMLNode], node: HTMLNode, filter: Callable[[HTMLNode], bool]):
+		def searchRecursive(results: List[HTMLNode], node: HTMLNode, filter: Callable[[HTMLNode], bool], depthRemaining: Optional[int]) -> None:
 			if filter(node):
 				results.append(node)
 
-			if isinstance(node, HTMLElementNode):
+			if isinstance(node, HTMLElementNode) and (depthRemaining is None or (depthRemaining := depthRemaining - 1) >= 0):
 				for child in node.children:
-					searchRecursive(results, child, filter)
+					searchRecursive(results, child, filter, depthRemaining)
 		
 		results: List[HTMLNode] = []
-		searchRecursive(results, self, filter)
+		searchRecursive(results, self, filter, maxDepth)
 
 		return results
 
