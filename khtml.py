@@ -320,18 +320,23 @@ class HTMLElementNode(HTMLNode):
 		else:
 			return False
 
-	def search(self, filter: Callable[[HTMLNode], bool], maxDepth: Optional[int] = None) -> List[HTMLNode]:
+	def search(self, filter: Callable[[HTMLNode], bool], maxDepth: Optional[int] = None, maxResults: Optional[int] = None) -> List[HTMLNode]:
 		
-		def searchRecursive(results: List[HTMLNode], node: HTMLNode, filter: Callable[[HTMLNode], bool], depthRemaining: Optional[int]) -> None:
+		def searchRecursive(results: List[HTMLNode], node: HTMLNode, filter: Callable[[HTMLNode], bool], depthRemaining: Optional[int], maxResults: Optional[int]) -> bool:
 			if filter(node):
 				results.append(node)
+				if maxResults is not None and len(results) >= maxResults:
+					return False
 
 			if isinstance(node, HTMLElementNode) and (depthRemaining is None or (depthRemaining := depthRemaining - 1) >= 0):
 				for child in node.children:
-					searchRecursive(results, child, filter, depthRemaining)
+					if not searchRecursive(results, child, filter, depthRemaining, maxResults):
+						return False
+					
+			return True
 		
 		results: List[HTMLNode] = []
-		searchRecursive(results, self, filter, maxDepth)
+		searchRecursive(results, self, filter, maxDepth, maxResults)
 
 		return results
 
