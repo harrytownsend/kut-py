@@ -70,6 +70,13 @@ class HTMLDocument:
 	def body(self) -> Optional["HTMLElementNode"]:
 		return self._body
 	
+	@property
+	def tables(self) -> Optional[List["HTMLTable"]]:
+		if self._body is not None:
+			return self._body.tables
+		else:
+			return None
+	
 	def _load(self, html: str) -> bool:
 		segment: HTMLParserSegment
 		node: HTMLElementNode
@@ -267,6 +274,14 @@ class HTMLElementNode(HTMLNode):
 
 		return html
 	
+	@property
+	def tables(self) -> List["HTMLTable"]:
+		results: List[HTMLTable] = []
+		for table in self.getElementsByTagName("table"):
+			results.append(HTMLTable(table))
+
+		return results
+	
 	def getElementById(self, id: str) -> Optional["HTMLElementNode"]:
 		results = self.getElementsById(id)
 		if len(results) > 0:
@@ -343,6 +358,140 @@ class HTMLCommentNode(HTMLNode):
 	@property
 	def html(self) -> str:
 		return "<!-- " + self.comment + " -->"
+
+class HTMLTable:
+	
+	_node: HTMLElementNode
+	_head: List["HTMLTableRow"]
+	_body: List["HTMLTableRow"]
+	_foot: List["HTMLTableRow"]
+	_rows: List["HTMLTableRow"]
+
+	_nodeChildrenCount: int
+
+	def __init__(self, node: HTMLElementNode):
+		self._node = node
+		self._head = []
+		self._body = []
+		self._foot = []
+		self._rows = []
+
+		self._nodeChildrenCount = len(node.children)
+
+		# If the table has any children, we need to determine whether we are getting thead/tbody/tfoot or are going straight to tr elements.
+		if isinstance(node, HTMLElementNode) and len(node.children) > 0:
+			firstChild: HTMLNode = node.children[0]
+
+			row: HTMLTableRow
+			
+			if isinstance(firstChild, HTMLElementNode) and firstChild.name == "tr":
+				for child in node.children:
+					if isinstance(child, HTMLElementNode) and child.name == "tr" and len(child.children) > 0:
+						firstChild = child.children[0]
+
+						if isinstance(firstChild, HTMLElementNode):
+							if firstChild.name == "th":
+								row = HTMLTableRow(child)
+								self._head.append(row)
+								self._rows.append(row)
+
+							elif firstChild.name == "td":
+								row = HTMLTableRow(child)
+								self._body.append(row)
+								self._rows.append(row)
+
+			else:
+				child: HTMLNode
+
+				position: int = 0
+
+				# Link rows in thead.
+				if position < self._nodeChildrenCount and isinstance(child := self._node.children[position], HTMLElementNode) and child.name == "thead":
+					for grandchild in child.children:
+						if isinstance(grandchild, HTMLElementNode) and grandchild.name == "tr":
+							row = HTMLTableRow(grandchild)
+							self._head.append(row)
+							self._rows.append(row)
+					position += 1
+
+				# Link rows in tbody.
+				if position < self._nodeChildrenCount and isinstance(child := self._node.children[position], HTMLElementNode) and child.name == "tbody":
+					for grandchild in child.children:
+						if isinstance(grandchild, HTMLElementNode) and grandchild.name == "tr":
+							row = HTMLTableRow(grandchild)
+							self._body.append(row)
+							self._rows.append(row)
+					position += 1
+
+				# Link rows in tfoot.
+				if position < self._nodeChildrenCount and isinstance(child := self._node.children[position], HTMLElementNode) and child.name == "tfoot":
+					for grandchild in child.children:
+						if isinstance(grandchild, HTMLElementNode) and grandchild.name == "tr":
+							row = HTMLTableRow(grandchild)
+							self._foot.append(row)
+							self._rows.append(row)
+					position += 1
+
+	@property
+	def node(self) -> HTMLElementNode:
+		return self._node
+	
+	@property
+	def head(self) -> List["HTMLTableRow"]:
+		return self._head
+	
+	@property
+	def body(self) -> List["HTMLTableRow"]:
+		return self._body
+	
+	@property
+	def foot(self) -> List["HTMLTableRow"]:
+		return self._foot
+	
+	@property
+	def rows(self) -> List["HTMLTableRow"]:
+		return self._rows
+
+
+class HTMLTableRow:
+
+	_node: HTMLElementNode
+	_cells: List["HTMLTableCell"]
+
+	def __init__(self, node: HTMLElementNode):
+		self._node = node
+		self._cells = []
+
+		for child in node.children:
+			if isinstance(child, HTMLElementNode) and child.name in ["th", "td"]:
+				self._cells.append(HTMLTableCell(child))
+
+	@property
+	def node(self) -> HTMLElementNode:
+		return self._node
+	
+	@property
+	def cells(self) -> List["HTMLTableCell"]:
+		return self._cells
+
+class HTMLTableCell:
+
+	_node: HTMLElementNode
+
+	def __init__(self, node: HTMLElementNode):
+		self._node = node
+
+	@property
+	def node(self) -> HTMLElementNode:
+		return self._node
+
+	@property
+	def text(self) -> str:
+		return self._node.innerHtml
+	
+	@property
+	def children(self) -> List[HTMLNode]:
+		return self._node.children
 
 class HTMLParser:
 
