@@ -283,12 +283,21 @@ class HTMLElementNode(HTMLNode):
 		return results
 	
 	def getElementById(self, id: str) -> Optional["HTMLElementNode"]:
-		results = self.getElementsById(id)
+		def filter(node: HTMLNode) -> bool:
+			return isinstance(node, HTMLElementNode) and "id" in node.attributes and node.attributes["id"] == id
+		
+		results: List[HTMLElementNode] = self.search(filter, maxResults = 1)
 		if len(results) > 0:
 			return results[0]
 		else:
 			return None
 	
+	def getElementsByAttribute(self, attribute: str, value: Optional[str] = None) -> List["HTMLElementNode"]:
+		def filter(node: HTMLNode) -> bool:
+			return isinstance(node, HTMLElementNode) and attribute in node.attributes and (value is None or node.attributes[attribute] == value)
+		
+		return self.search(filter)
+
 	def getElementsByClassName(self, className: str) -> List["HTMLElementNode"]:
 		def filter(node: HTMLNode) -> bool:
 			return isinstance(node, HTMLElementNode) and node.hasClass(className)
@@ -296,16 +305,10 @@ class HTMLElementNode(HTMLNode):
 		return self.search(filter)
 	
 	def getElementsById(self, id: str) -> List["HTMLElementNode"]:
-		def filter(node: HTMLNode) -> bool:
-			return isinstance(node, HTMLElementNode) and "id" in node.attributes and node.attributes["id"] == id
-		
-		return self.search(filter)
+		return self.getElementsByAttribute("id", id)
 
 	def getElementsByName(self, name: str) -> List["HTMLElementNode"]:
-		def filter(node: HTMLNode) -> bool:
-			return isinstance(node, HTMLElementNode) and "name" in node.attributes and node.attributes["name"] == name
-		
-		return self.search(filter)
+		return self.getElementsByAttribute("name", name)
 
 	def getElementsByTagName(self, tagName: str) -> List["HTMLElementNode"]:
 		def filter(node: HTMLNode) -> bool:
