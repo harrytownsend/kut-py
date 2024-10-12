@@ -729,7 +729,7 @@ class HTMLParser:
 		if find >= 0:
 			segment.end = find + 3
 			segment.text = self._html[segment.start:segment.end]
-			segment.comment = segment.text[4:find].strip()
+			segment.comment = self._html[position:find].strip()
 		else:
 			return None
 		
