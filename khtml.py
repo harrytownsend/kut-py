@@ -250,9 +250,9 @@ class HTMLDocument:
 							html += node.name.upper()
 						else:
 							html += node.name
-							
+
 						for key, value in node.attributes.items():
-							if node.name == "!doctype":
+							if node.name == "!doctype" and value == "true":
 								html += " " + key
 							else:
 								html += " " + key + "=\"" + value + "\""
@@ -272,7 +272,10 @@ class HTMLDocument:
 							html += node.name
 
 						for key, value in node.attributes.items():
-							html += " " + key + "=\"" + value + "\""
+							if node.name == "!doctype" and value == "true":
+								html += " " + key
+							else:
+								html += " " + key + "=\"" + value + "\""
 						html += ">"
 
 						if shrinkText and len(node.children) == 1 and isinstance(node.children[0], HTMLTextNode) and len(node.children[0].html) <= shrinkLimit:
