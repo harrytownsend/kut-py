@@ -245,9 +245,17 @@ class HTMLDocument:
 				# Elements and text/comments need to be handled differently.
 				if isinstance(node, HTMLElementNode):
 					if node.name not in document._neverSelfClosing and (node.name in document._alwaysSelfClosing or (selfClosing and len(node.children) == 0)):
-						html += "<" + node.name
+						html += "<"
+						if node.name == "!doctype":
+							html += node.name.upper()
+						else:
+							html += node.name
+							
 						for key, value in node.attributes.items():
-							html += " " + key + "=\"" + value + "\""
+							if node.name == "!doctype":
+								html += " " + key
+							else:
+								html += " " + key + "=\"" + value + "\""
 
 						# Things like doctype tags should't have the "/"".
 						if node.name not in document._alwaysSelfClosing:
@@ -257,7 +265,12 @@ class HTMLDocument:
 						html += ">"
 
 					else:
-						html += "<" + node.name
+						html += "<"
+						if node.name == "!doctype":
+							html += node.name.upper()
+						else:
+							html += node.name
+
 						for key, value in node.attributes.items():
 							html += " " + key + "=\"" + value + "\""
 						html += ">"
