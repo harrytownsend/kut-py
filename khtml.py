@@ -22,6 +22,14 @@ class HTMLDocument:
 		"br",
 		"img"
 	]
+
+	_neverSelfClosing: List[str] = [
+		"script",
+		"style",
+		"html",
+		"head",
+		"body"
+	]
 	
 
 	def __init__(self, html: str, strict: bool = False, comments: bool = False):
@@ -29,9 +37,9 @@ class HTMLDocument:
 		self._strict = strict
 		self._comments = comments
 
+		self._rootList = []
 		self._doctype = None
 		self._html = None
-		self._rootList = []
 		self._head = None
 		self._body = None
 
@@ -209,6 +217,60 @@ class HTMLDocument:
 			node = None
 
 		return node
+	
+	def write(self, pretty: bool = True, indent: int = 2, tabs: bool = False, selfClosing: bool = True, shrinkText: bool = True, shrinkLimit: int = 20) -> str:
+
+		def writeNode(document: HTMLDocument, nodeList: List[HTMLNode], pretty: bool, indent: int, selfClosing: bool, shrinkText: bool, shrinkLimit: int, depth: int = 0, first: bool = True) -> str:
+			html: str = ""
+
+			for node in nodeList:
+				prefix: str = ""
+
+				# Handle newlines and indentation if we are pretty printing.
+				if pretty:
+					# the first line in the document shouldn't have a newline before it.
+					if first:
+						first = False
+					else:
+						html += "\r\n"
+					
+					# Check whether we do tabs or spaces.
+					if tabs:
+						# For tabs, we will ignore the indent size.
+						prefix = "".rjust(depth, "\t")
+					else:
+						prefix = "".rjust(depth * indent, " ")
+					html += prefix
+
+				# Elements and text/comments need to be handled differently.
+				if isinstance(node, HTMLElementNode):
+					if node.name not in document._neverSelfClosing and (node.name in document._alwaysSelfClosing or (selfClosing and len(node.children) == 0)):
+						html += "<" + node.name
+						for key, value in node.attributes.items():
+							html += " " + key + "=\"" + value + "\""
+						html += "/>"
+
+					else:
+						html += "<" + node.name
+						for key, value in node.attributes.items():
+							html += " " + key + "=\"" + value + "\""
+						html += ">"
+
+						if shrinkText and len(node.children) == 1 and isinstance(node.children[0], HTMLTextNode) and len(node.children[0].html) <= shrinkLimit:
+							html += node.children[0].html
+						else:
+							html += writeNode(document, node.children, pretty, indent, selfClosing, shrinkText, shrinkLimit, depth + 1, first)
+
+							if pretty:
+								html += "\r\n" + prefix
+						html += "</" + node.name + ">"
+				else:
+					html += node.html
+
+			return html
+			
+		return writeNode( self, self._rootList, pretty, indent, selfClosing, shrinkText, shrinkLimit)
+			
 
 class HTMLNode:
 	
