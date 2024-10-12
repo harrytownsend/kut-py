@@ -248,9 +248,13 @@ class HTMLDocument:
 						html += "<" + node.name
 						for key, value in node.attributes.items():
 							html += " " + key + "=\"" + value + "\""
-						if len(node.attributes) > 0:
-							html += " "
-						html += "/>"
+
+						# Things like doctype tags should't have the "/"".
+						if node.name not in document._alwaysSelfClosing:
+							if len(node.attributes) > 0:
+								html += " "
+							html += "/"
+						html += ">"
 
 					else:
 						html += "<" + node.name
