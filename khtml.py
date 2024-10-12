@@ -248,6 +248,8 @@ class HTMLDocument:
 						html += "<" + node.name
 						for key, value in node.attributes.items():
 							html += " " + key + "=\"" + value + "\""
+						if len(node.attributes) > 0:
+							html += " "
 						html += "/>"
 
 					else:
