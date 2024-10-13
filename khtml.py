@@ -86,12 +86,22 @@ class HTMLDocument:
 			return None
 	
 	def _load(self, html: str) -> bool:
+		"""Loads the document tree from the html text.
+
+		Args:
+			html (str): The html text of the document.
+
+		Returns:
+			bool: True if the document was loaded correctly. Otherwise, False.
+		"""
+
 		segment: HTMLParserSegment
 		node: HTMLElementNode
 		response: Optional[HTMLParserSegment]
 
 		parser: HTMLParser = HTMLParser(html, self._strict)
 
+		# Iterate through segments at the root level of the document.
 		while (segment := parser.next()) is not None:
 			if isinstance(segment, HTMLParserElementSegment):
 				if segment.open:
@@ -109,6 +119,7 @@ class HTMLDocument:
 				elif self._strict:
 					raise Exception("A closing tag was found at the root level of the document at position: " + str(segment.start))
 
+			# Comment and text nodes don't have any special behaviour.
 			elif isinstance(segment, HTMLParserTextSegment):
 				self._rootList.append(self._createNode(segment))
 			elif isinstance(segment, HTMLParserCommentSegment) and self._comments:
@@ -121,6 +132,12 @@ class HTMLDocument:
 		return True
 				
 	def _loadChildren(self, parent: "HTMLElementNode", parser: "HTMLParser") -> Optional["HTMLParserSegment"]:
+		"""Recursively deals with building out the node tree for the root based on the parsed HTML segments.
+
+		Returns:
+			Optional[HTMLParserSegment]: If a close segment was not consumed, return it so a match can be found at a higher level.
+		"""
+
 		segment: Optional[HTMLParser]
 		node: Optional[HTMLElementNode]
 		response: Optional[HTMLParserSegment]
@@ -175,6 +192,9 @@ class HTMLDocument:
 			return None
 		
 	def _linkNodes(self) -> None:
+		"""Link various key elements (like html, head, and body) to the shortcut accessors.
+		"""
+
 		# Link the top level nodes.
 		for index, node in enumerate(self._rootList):
 			if isinstance(node, HTMLElementNode):
@@ -199,6 +219,12 @@ class HTMLDocument:
 							self._body = node
 
 	def _createNode(self, segment: "HTMLParserSegment", parent: Optional["HTMLElementNode"] = None) -> Optional["HTMLNode"]:
+		"""Create a node based on the provided html segment.
+
+		Returns:
+			Optional[HTMLNode]: The node created from the segment, if one could be created.
+		"""
+
 		node: Optional[HTMLNode]
 
 		if isinstance(segment, HTMLParserElementSegment):
@@ -219,8 +245,38 @@ class HTMLDocument:
 		return node
 	
 	def write(self, pretty: bool = True, indent: int = 2, tabs: bool = False, selfClosing: bool = True, shrinkText: bool = True, shrinkLimit: int = 20) -> str:
+		"""Write the HTML document as a custom-formatted string.
+
+		Args:
+			pretty (bool, optional): Whether to pretty-print the html (newlines, indenting, etc). Defaults to True.
+			indent (int, optional): The number of spaces to indent each child node from its parent (disabled if using tabs). Defaults to 2.
+			tabs (bool, optional): Whether to use tabs instead of spaces (ignores indent size). Defaults to False.
+			selfClosing (bool, optional): Whether to use self closing tags for elements that support them and have no children. Defaults to True.
+			shrinkText (bool, optional): Whether to put elements and their content all on the same line if the content is a text node. Defaults to True.
+			shrinkLimit (int, optional): If shrinkText is True, the maximum length of content to include in a single line before putting it indented on a new line. Defaults to 20.
+
+		Returns:
+			str: A formatted string representation of the HTML document
+		"""
 
 		def writeNode(document: HTMLDocument, nodeList: List[HTMLNode], pretty: bool, indent: int, selfClosing: bool, shrinkText: bool, shrinkLimit: int, depth: int = 0, first: bool = True) -> str:
+			"""_summary_
+
+			Args:
+				document (HTMLDocument): The HTMLDocument object that is being written.
+				nodeList (List[HTMLNode]): The list of sibling nodes to print.
+				pretty (bool): Whether to pretty-print the html (newlines, indenting, etc)
+				indent (int): The number of spaces to indent each child node from its parent (disabled if using tabs).
+				selfClosing (bool): Whether to use self closing tags for elements that support them and have no children.
+				shrinkText (bool): Whether to put elements and their content all on the same line if the content is a text node.
+				shrinkLimit (int): If shrinkText is True, the maximum length of content to include in a single line before putting it indented on a new line.
+				depth (int, optional): The number of nodes deep the current processing is. Defaults to 0.
+				first (bool, optional): Whether the first node in the list is the first node of the document. Defaults to True.
+
+			Returns:
+				str: Returns a string representation of the supplied nodes, including any formatting appropriate to their location in the document.
+			"""
+
 			html: str = ""
 
 			for node in nodeList:
@@ -336,6 +392,12 @@ class HTMLElementNode(HTMLNode):
 	
 	@property
 	def html(self) -> str:
+		"""Get the node and its descendants as a basic HTML string.
+
+		Returns:
+			str: Representation of the node and all children.
+		"""
+
 		html: str = "<" + self.name
 
 		# Add attributes
@@ -352,6 +414,12 @@ class HTMLElementNode(HTMLNode):
 
 	@property
 	def innerHtml(self) -> str:
+		"""Get the children of this node as a basic HTML string.
+
+		Returns:
+			str: Representation of all children.
+		"""
+
 		html: str = ""
 		for child in self.children:
 			html += child.html
@@ -360,6 +428,12 @@ class HTMLElementNode(HTMLNode):
 	
 	@property
 	def tables(self) -> List["HTMLTable"]:
+		"""Get a list of all of the tables in the document, parsed into ready-to-use data structures.
+
+		Returns:
+			List[HTMLTable]: A list of all tables found within the node and its children.
+		"""
+
 		results: List[HTMLTable] = []
 		for table in self.getElementsByTagName("table"):
 			results.append(HTMLTable(table))
@@ -367,6 +441,15 @@ class HTMLElementNode(HTMLNode):
 		return results
 	
 	def getElementById(self, id: str) -> Optional["HTMLElementNode"]:
+		"""Get the node with the specified id.
+
+		Args:
+			id (str): The id of the element to find.
+
+		Returns:
+			Optional[HTMLElementNode]: The first node with the specified id.
+		"""
+
 		def filter(node: HTMLNode) -> bool:
 			return isinstance(node, HTMLElementNode) and "id" in node.attributes and node.attributes["id"] == id
 		
@@ -377,30 +460,86 @@ class HTMLElementNode(HTMLNode):
 			return None
 	
 	def getElementsByAttribute(self, attribute: str, value: Optional[str] = None) -> List["HTMLElementNode"]:
+		"""Get all elements with the specified attribute and, optionally, value. If the value is not specified,
+			all elements that possess an attribute with the matching name, irrespective of value, will be returned.
+
+		Args:
+			attribute (str): The name of the attribute to look for in each node.
+			value (str, optional): The value of the attribute.
+
+		Returns:
+			List[HTMLElementNode]: A list of all matching elements.
+		"""
+
 		def filter(node: HTMLNode) -> bool:
 			return isinstance(node, HTMLElementNode) and attribute in node.attributes and (value is None or node.attributes[attribute] == value)
 		
 		return self.search(filter)
 
 	def getElementsByClassName(self, className: str) -> List["HTMLElementNode"]:
+		"""Get all elements where the specified class is among those on the element.
+
+		Args:
+			className (str): The name of the class to look for.
+
+		Returns:
+			List[HTMLElementNode]: A list of all matching elements.
+		"""
+
 		def filter(node: HTMLNode) -> bool:
 			return isinstance(node, HTMLElementNode) and node.hasClass(className)
 		
 		return self.search(filter)
 	
 	def getElementsById(self, id: str) -> List["HTMLElementNode"]:
+		"""Get all elements with the specified id. (In a well formed document, there should be 0-1)
+
+		Args:
+			id (str): The id to look for.
+
+		Returns:
+			List[HTMLElementNode]: A list of all matching elements.
+		"""
+
 		return self.getElementsByAttribute("id", id)
 
 	def getElementsByName(self, name: str) -> List["HTMLElementNode"]:
+		"""Get all elements with the specified name. (In a well formed document, there should be 0-1)
+
+		Args:
+			name (str): The name of the element to look for.
+
+		Returns:
+			List[HTMLElementNode]: A list of all matching elements.
+		"""
+
 		return self.getElementsByAttribute("name", name)
 
 	def getElementsByTagName(self, tagName: str) -> List["HTMLElementNode"]:
+		"""Get all elements of the specified tag type.
+
+		Args:
+			tagName (str): The type of tag to look for.
+
+		Returns:
+			List[HTMLElementNode]: A list of all matching elements.
+		"""
+
 		def filter(node: HTMLNode) -> bool:
 			return isinstance(node, HTMLElementNode) and node.name == tagName
 	
 		return self.search(filter)
 	
 	def hasClass(self, className: str) -> bool:
+		"""Checks whether the specified class is among those on the element.
+
+		Args:
+			className (str): The name of the class to check for.
+
+		Returns:
+			bool: Whether the class was found on the element.
+		"""
+
 		if "class" in self.attributes:
 			classList: List[str] = self.attributes["class"].split(" ")
 			return className in classList
@@ -408,8 +547,31 @@ class HTMLElementNode(HTMLNode):
 			return False
 
 	def search(self, filter: Callable[[HTMLNode], bool], maxDepth: Optional[int] = None, maxResults: Optional[int] = None) -> List[HTMLNode]:
+		"""Search for all elements in the node tree (including the parent) based on the specified filter function.
+
+		Args:
+			filter (Callable[[HTMLNode], bool]): The filter function that will return True/False indicating whether to include the element.
+			maxDepth (Optional[int], optional): The maximum number of younger generations to search for the element (min 0). Defaults to None.
+			maxResults (Optional[int], optional): The maximum number of the specified elements to return. Defaults to None.
+
+		Returns:
+			List[HTMLNode]: A list of all elements that match all of the specified crtieria for the search.
+		"""
 		
 		def searchRecursive(results: List[HTMLNode], node: HTMLNode, filter: Callable[[HTMLNode], bool], depthRemaining: Optional[int], maxResults: Optional[int]) -> bool:
+			"""Recursively check the specified node and all of its descendants for matches.
+
+			Args:
+				results (List[HTMLNode]): The list that matching elements should be added to.
+				node (HTMLNode): The node to check for a match on and to check its children for.
+				filter (Callable[[HTMLNode], bool]): The filter function that will return True/False indicating whether to include the element.
+				depthRemaining (Optional[int]): The number of remaining generations to search through. None indicates all.
+				maxResults (Optional[int]): The maximum number of the specified elements to return.
+
+			Returns:
+				bool: _description_
+			"""
+
 			if filter(node):
 				results.append(node)
 				if maxResults is not None and len(results) >= maxResults:
@@ -635,6 +797,12 @@ class HTMLParser:
 		return self._segmentCurrent
 	
 	def next(self) -> Optional["HTMLParserSegment"]:
+		"""Get the next html segment from the html text.
+
+		Returns:
+			Optional[HTMLParserSegment]: The next segment or None if there are no more.
+		"""
+
 		segment: Optional[HTMLParserSegment]
 
 		segmentCurrent: Optional[HTMLParserSegment] = self._segmentCurrent
@@ -674,6 +842,15 @@ class HTMLParser:
 	"""
 	
 	def _readTag(self, position: int) -> Optional["HTMLParserElementSegment"]:
+		"""Attempt to read a valid HTML tag (open or close) at the specified location.
+
+		Args:
+			position (int): The position in the html text to start reading form.
+
+		Returns:
+			Optional[HTMLParserElementSegment]: The segment representing the html element if one was found, otherwise None.
+		"""
+
 		segment: HTMLParserElementSegment = HTMLParserElementSegment()
 		segment.start = position
 
@@ -737,6 +914,15 @@ class HTMLParser:
 		return segment
 
 	def _readComment(self, position: int) -> Optional["HTMLParserCommentSegment"]:
+		"""Attempt to read a comment tag at the specified location in the html text.
+
+		Args:
+			position (int): The position in the html text to start reading form.
+
+		Returns:
+			Optional[HTMLParserCommentSegment]: A segment representing the found comment, or None if one was not found.
+		"""
+
 		segment: HTMLParserCommentSegment = HTMLParserCommentSegment()
 		segment.start = position
 
@@ -758,6 +944,15 @@ class HTMLParser:
 		return segment
 
 	def _readText(self, position: int) -> Optional["HTMLParserTextSegment"]:
+		"""Attempt to read regular text at the specified location in the html text.
+
+		Args:
+			position (int): The position in the html text to start looking from.
+
+		Returns:
+			Optional[HTMLParserSegmentText]: A segment representing the text that was found, or None if no text was found.
+		"""
+
 		segment: HTMLParserTextSegment = HTMLParserTextSegment()
 		segment.start = position
 
@@ -785,6 +980,17 @@ class HTMLParser:
 			return None
 		
 	def _readSpecialContextTagEnd(self, position: int, contextTag: str) -> Optional["HTMLParserElementSegment"]:
+		"""Attempt to read a closing tag of a specified type. This is intented for use in looking for the end of sections
+			of the html text where the context changes, such as with a script or style tag.
+
+		Args:
+			position (int): The position in the html text to look for the closing tag.
+			contextTag (str): The name of the closing tag to look for.
+
+		Returns:
+			Optional[HTMLParserElementSegment]: The segment representing the close tag, or None if one wasn't found.
+		"""
+
 		segment: Optional[HTMLParserElementSegment] = self._readTag(position)
 		if segment is not None and not segment.open and segment.close and segment.name == contextTag:
 			return segment
@@ -792,6 +998,16 @@ class HTMLParser:
 			return None
 
 	def _readSpecialContextText(self, position: int, contextTag: str) -> Optional["HTMLParserTextSegment"]:
+		"""Attempt to read all of the text contained within a special context tag, like script or style.
+
+		Args:
+			position (int): The location in the html text to look for the text.
+			contextTag (str): The name of the context tag we're in.
+
+		Returns:
+			Optional[HTMLParserTextSegment]: The segment representing the text, or None if none was found.
+		"""
+
 		segment: HTMLParserTextSegment = HTMLParserTextSegment()
 		segment.start = position
 
@@ -823,6 +1039,16 @@ class HTMLParser:
 	"""
 
 	def _readTagAttribute(self, position: int, attributes: Dict[str, str]) -> Optional[int]:
+		"""Read an attribute from within an open tag at the specified location.
+
+		Args:
+			position (int): The position in the html text to look for the attribute.
+			attributes (Dict[str, str]): The dictionary to add the found attribute/value to.
+
+		Returns:
+			Optional[int]: The end location of the attribute, or None if one wasn't found.
+		"""
+
 		start: int = position
 
 		name: Optional[str] = None
@@ -860,6 +1086,15 @@ class HTMLParser:
 		return position
 
 	def _readTagAttributeProperty(self, position: int) -> Optional[int]:
+		"""Attempt to read the name of a property at the specified location in the html text.
+
+		Args:
+			position (int): The position in the html text to look for the attribute name.
+
+		Returns:
+			Optional[int]: The position of the end of the attribute name, or None if one was not found.
+		"""
+
 		start: int = position
 
 		# HTML elements should not have a quoted attribute name.
@@ -906,6 +1141,15 @@ class HTMLParser:
 				return None
 
 	def _readTagAttributeValue(self, position: int) -> Optional[int]:
+		"""Attempt to find the value of an attribute in the html text.
+
+		Args:
+			position (int): The position in the html text to look for the value.
+
+		Returns:
+			Optional[int]: The end position of the value, or None if one was not found.
+		"""
+
 		start: int = position
 
 		if self._html[position] in ["\"", "'"]:
@@ -945,6 +1189,15 @@ class HTMLParser:
 			return None
 
 	def _readTagName(self, position: int) -> Optional[int]:
+		"""Attempt to read the name of a tag at the specified position in the html text.
+
+		Args:
+			position (int): The position in the html text to look for the tag name.
+
+		Returns:
+			Optional[int]: The position of the end of the tag name, or None if one was not found.
+		"""
+
 		start: int = position
 
 		# Check for the exceptional case of the doctype tag.
@@ -974,6 +1227,15 @@ class HTMLParser:
 			return None
 
 	def _readTagNameDoctype(self, position: int) -> Optional[int]:
+		"""Attempt to read a doctype tag name at the specified position in the html text.
+
+		Args:
+			position (int): The position in the html string to look for the doctype tag name.
+
+		Returns:
+			Optional[int]: The position of the end of the doctype tag name, or None if one was not found.
+		"""
+
 		doctype: str = "!DOCTYPE"
 		end: int = position + len(doctype)
 
@@ -988,12 +1250,30 @@ class HTMLParser:
 			return None
 
 	def _readWhitespace(self, position: int) -> int:
+		"""Read all whitespace in the document at the specified location.
+
+		Args:
+			position (int): The position in the html text to look for the whitespace.
+
+		Returns:
+			int: The position of the first non-whitespace character.
+		"""
+
 		while position < self._htmlLength and self._html[position].isspace():
 			position += 1
 
 		return position
 	
 	def _unwrap(self, text: str) -> str:
+		"""Remove any quotes around the value.
+
+		Args:
+			text (str): The text to remove the quotes from.
+
+		Returns:
+			str: The string sans quotes.
+		"""
+
 		if text.startswith("\"") or text.startswith("'"):
 			return text[1:len(text)-1]
 		else:
